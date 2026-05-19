@@ -64,7 +64,7 @@ function Show-Phase {
     Write-Host ""
     Write-Host "  $Icon  Phase $Number/$Total — $Title" -ForegroundColor Yellow
     Write-Host ("  " + "─" * 60) -ForegroundColor DarkGray
-    Write-Log "=== PHASE $Number/${Total}: $Title ==="
+    Write-Log "=== PHASE ${Number}/${Total}: ${Title} ==="
 }
 
 function Show-Step {
@@ -141,6 +141,85 @@ function Set-RegistryValue {
     param([string]$Path, [string]$Name, $Value, [string]$Type = "DWord")
     if (-not (Test-Path $Path)) { New-Item -Path $Path -Force | Out-Null }
     Set-ItemProperty -Path $Path -Name $Name -Value $Value -Type $Type -Force
+}
+
+function Install-MyanmarKeyboardApp {
+    param([string]$Id, [string]$Name)
+    Show-Step "Installing $Name" "WORK"
+    $result = winget install --id $Id `
+        --silent `
+        --accept-package-agreements `
+        --accept-source-agreements `
+        --disable-interactivity 2>&1
+    if ($LASTEXITCODE -eq 0 -or ($result -match "successfully installed")) {
+        $INSTALLED.Add($Name) | Out-Null
+        Write-Log "OK  $Name ($Id)"
+        Show-Step "$Name installed successfully" "OK"
+        return $true
+    } elseif ($result -match "already installed") {
+        $SKIPPED.Add($Name) | Out-Null
+        Write-Log "SKIP  $Name ($Id)"
+        Show-Step "$Name already installed" "SKIP"
+        return $true
+    } else {
+        $ERRORS.Add("$Name ($Id)") | Out-Null
+        Write-Log "FAIL  $Name ($Id)"
+        Show-Step "$Name failed to install" "FAIL"
+        return $false
+    }
+}
+
+function Select-MyanmarKeyboard {
+    Clear-Host
+    Write-Host ""
+    Write-Host "  ╔══════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "  ║     Myanmar Keyboard Input — Select One      ║" -ForegroundColor Cyan
+    Write-Host "  ╠══════════════════════════════════════════════╣" -ForegroundColor Cyan
+    Write-Host "  ║  [1]  KeyMagic   (lightweight, open source)  ║" -ForegroundColor White
+    Write-Host "  ║  [2]  Keyman     (feature-rich, Unicode)     ║" -ForegroundColor White
+    Write-Host "  ║  [3]  Both       (install both)              ║" -ForegroundColor White
+    Write-Host "  ║  [S]  Skip       (install neither)           ║" -ForegroundColor White
+    Write-Host "  ╚══════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+
+    $choice = $null
+    while (-not $choice) {
+        $input = Read-Host "  Choose [1/2/3/S]"
+        switch -Regex ($input.Trim()) {
+            '^[1]$'    { $choice = '1' }
+            '^[2]$'    { $choice = '2' }
+            '^[3]$'    { $choice = '3' }
+            '^[sS]$'   { $choice = 'S' }
+            default    { Write-Host "  Invalid selection. Please press 1, 2, 3, or S." -ForegroundColor Yellow }
+        }
+    }
+
+    Write-Host ""
+    $resultLabel = "Skipped"
+    switch ($choice) {
+        '1' {
+            Write-Log "Myanmar keyboard selection: KeyMagic"
+            Install-MyanmarKeyboardApp -Id "KeyMagic.KeyMagic" -Name "KeyMagic"
+            $resultLabel = "KeyMagic"
+        }
+        '2' {
+            Write-Log "Myanmar keyboard selection: Keyman"
+            Install-MyanmarKeyboardApp -Id "SIL.Keyman" -Name "Keyman"
+            $resultLabel = "Keyman"
+        }
+        '3' {
+            Write-Log "Myanmar keyboard selection: Both (KeyMagic + Keyman)"
+            Install-MyanmarKeyboardApp -Id "KeyMagic.KeyMagic" -Name "KeyMagic"
+            Install-MyanmarKeyboardApp -Id "SIL.Keyman"        -Name "Keyman"
+            $resultLabel = "KeyMagic + Keyman"
+        }
+        'S' {
+            Write-Log "Myanmar keyboard selection: Skipped"
+            Show-Step "Myanmar keyboard skipped" "SKIP"
+            $resultLabel = "Skipped"
+        }
+    }
+    return $resultLabel
 }
 
 # ══════════════════════════════════════════════════════════════════
@@ -363,8 +442,13 @@ foreach ($app in $coreApps) {
     Install-App -Id $app.id -Name $app.name -Current $i -Total $total
     $i++
 }
-Write-Host "" ; Write-Host "" ; Write-Host "  Phase 3 complete." -ForegroundColor Green
-Update-Dashboard -Phase 2 -Status "done" -Progress 100 -LogMessage "✓ Phase 3 complete"
+Write-Host "" ; Write-Host ""
+
+# ── MYANMAR KEYBOARD INPUT ──
+$myanmarChoice = Select-MyanmarKeyboard
+
+Write-Host "" ; Write-Host "  Phase 3 complete." -ForegroundColor Green
+Update-Dashboard -Phase 2 -Status "done" -Progress 100 -LogMessage "✓ Phase 3 complete — Myanmar keyboard: $myanmarChoice"
 
 # ══════════════════════════════════════════════════════════════════
 #  PHASE 4 — PYTHON FULL STACK ENVIRONMENT
