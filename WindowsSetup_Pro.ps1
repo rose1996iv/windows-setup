@@ -64,7 +64,7 @@ function Show-Phase {
     Write-Host ""
     Write-Host "  $Icon  Phase $Number/$Total — $Title" -ForegroundColor Yellow
     Write-Host ("  " + "─" * 60) -ForegroundColor DarkGray
-    Write-Log "=== PHASE $Number/$Total: $Title ==="
+    Write-Log "=== PHASE $Number/${Total}: $Title ==="
 }
 
 function Show-Step {
