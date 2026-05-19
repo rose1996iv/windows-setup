@@ -18,6 +18,7 @@ jobs:
       - name: Parse install.ps1
         shell: pwsh
         run: |
+          $errors = $null
           $null = [System.Management.Automation.Language.Parser]::ParseFile(
             "${{ github.workspace }}/install.ps1",
             [ref]$null,
@@ -27,11 +28,12 @@ jobs:
             $errors | ForEach-Object { Write-Error $_.Message }
             exit 1
           }
-          Write-Host "✓ install.ps1 — no syntax errors" -ForegroundColor Green
+          Write-Host "install.ps1 — no syntax errors" -ForegroundColor Green
 
       - name: Parse WindowsSetup_Pro.ps1
         shell: pwsh
         run: |
+          $errors = $null
           $null = [System.Management.Automation.Language.Parser]::ParseFile(
             "${{ github.workspace }}/WindowsSetup_Pro.ps1",
             [ref]$null,
@@ -41,7 +43,7 @@ jobs:
             $errors | ForEach-Object { Write-Error $_.Message }
             exit 1
           }
-          Write-Host "✓ WindowsSetup_Pro.ps1 — no syntax errors" -ForegroundColor Green
+          Write-Host "WindowsSetup_Pro.ps1 — no syntax errors" -ForegroundColor Green
 
   # ── Job 2: HTML Validation ──────────────────────────────────────
   lint-html:
@@ -51,13 +53,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate index.html exists and is non-empty
+      - name: Validate index.html
         run: |
           if [ ! -s "index.html" ]; then
-            echo "❌ index.html is missing or empty"
+            echo "index.html is missing or empty"
             exit 1
           fi
-          echo "✓ index.html found ($(wc -c < index.html) bytes)"
+          echo "index.html found ($(wc -c < index.html) bytes)"
 
   # ── Job 3: Deploy to Vercel ─────────────────────────────────────
   deploy:
@@ -69,17 +71,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
-
-      - name: Pull Vercel Environment
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Build
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Deploy
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          working-directory: ./
