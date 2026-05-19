@@ -15,35 +15,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Parse install.ps1
+      - name: Parse PowerShell scripts for syntax errors
         shell: pwsh
         run: |
-          $errors = $null
-          $null = [System.Management.Automation.Language.Parser]::ParseFile(
-            "${{ github.workspace }}/install.ps1",
-            [ref]$null,
-            [ref]$errors
-          )
-          if ($errors.Count -gt 0) {
-            $errors | ForEach-Object { Write-Error $_.Message }
-            exit 1
+          $files = @('install.ps1', 'WindowsSetup_Pro.ps1')
+          $allOk = $true
+          foreach ($file in $files) {
+            $content = Get-Content $file -Raw
+            $parsed = [System.Management.Automation.Language.Parser]::ParseInput(
+              $content, [ref]$null, [ref]$null
+            )
+            $errCheck = $null
+            [System.Management.Automation.Language.Parser]::ParseInput(
+              $content,
+              [ref]$null,
+              [ref]$errCheck
+            )
+            if ($errCheck.Count -gt 0) {
+              Write-Host "FAIL: $file has $($errCheck.Count) syntax error(s)" -ForegroundColor Red
+              $errCheck | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+              $allOk = $false
+            } else {
+              Write-Host "OK: $file" -ForegroundColor Green
+            }
           }
-          Write-Host "install.ps1 — no syntax errors" -ForegroundColor Green
-
-      - name: Parse WindowsSetup_Pro.ps1
-        shell: pwsh
-        run: |
-          $errors = $null
-          $null = [System.Management.Automation.Language.Parser]::ParseFile(
-            "${{ github.workspace }}/WindowsSetup_Pro.ps1",
-            [ref]$null,
-            [ref]$errors
-          )
-          if ($errors.Count -gt 0) {
-            $errors | ForEach-Object { Write-Error $_.Message }
-            exit 1
-          }
-          Write-Host "WindowsSetup_Pro.ps1 — no syntax errors" -ForegroundColor Green
+          if (-not $allOk) { exit 1 }
 
   # ── Job 2: HTML Validation ──────────────────────────────────────
   lint-html:
@@ -59,7 +55,7 @@ jobs:
             echo "index.html is missing or empty"
             exit 1
           fi
-          echo "index.html found ($(wc -c < index.html) bytes)"
+          echo "index.html OK: $(wc -c < index.html) bytes"
 
   # ── Job 3: Deploy to Vercel ─────────────────────────────────────
   deploy:
