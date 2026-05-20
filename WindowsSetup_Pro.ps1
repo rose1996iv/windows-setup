@@ -124,30 +124,100 @@ function Show-Summary {
     Write-Host ""
 }
 
-function Install-App {
+# ── Smart installer: scan first, install missing (priority), then update existing ──
+function Install-PhaseApps {
     param(
-        [string]$Id,
-        [string]$Name,
-        [int]$Current,
-        [int]$Total
+        [array]$Apps,
+        [int]$DashPhase,
+        [string]$DashLabel
     )
-    Show-Progress -Current $Current -Total $Total -Label $Name
-    $result = winget install --id $Id `
-        --silent `
-        --accept-package-agreements `
-        --accept-source-agreements `
-        --disable-interactivity 2>&1
 
-    if ($LASTEXITCODE -eq 0 -or ($result -match "successfully installed")) {
-        $INSTALLED.Add($Name) | Out-Null
-        Write-Log "OK  $Name ($Id)"
-    } elseif ($result -match "already installed") {
-        $SKIPPED.Add($Name) | Out-Null
-        Write-Log "SKIP  $Name ($Id)"
-    } else {
-        $ERRORS.Add("$Name ($Id)") | Out-Null
-        Write-Log "FAIL  $Name ($Id)"
+    # -- Single winget list call to get all installed packages (fast) ─────────
+    Show-Step "Scanning installed apps on this machine..." "INFO"
+    Update-Dashboard -Phase $DashPhase -Status "running" -Progress 8 `
+        -LogMessage "ℹ Scanning $($Apps.Count) apps — checking installed vs. new..."
+
+    $installedSnapshot = winget list --accept-source-agreements 2>&1 | Out-String
+
+    $toInstall = [System.Collections.Generic.List[object]]::new()
+    $toUpdate  = [System.Collections.Generic.List[object]]::new()
+
+    foreach ($app in $Apps) {
+        # Match by winget ID (case-insensitive)
+        if ($installedSnapshot -match [regex]::Escape($app.id)) {
+            $toUpdate.Add($app)
+        } else {
+            $toInstall.Add($app)
+        }
     }
+
+    $newCount    = $toInstall.Count
+    $updateCount = $toUpdate.Count
+    Show-Step "New to install: $newCount  |  Already installed (will update): $updateCount" "INFO"
+    Update-Dashboard -Phase $DashPhase -Status "running" -Progress 12 `
+        -LogMessage "ℹ New: $newCount app(s) · Updating: $updateCount app(s)"
+
+    $total   = $Apps.Count
+    $counter = 1
+
+    # ── Priority: install missing apps first ──────────────────────────────────
+    if ($toInstall.Count -gt 0) {
+        Write-Host ""
+        Write-Host "  ⬇  Installing $($toInstall.Count) new app(s) — priority pass" -ForegroundColor Cyan
+        Write-Host ("  " + "─" * 55) -ForegroundColor DarkGray
+        foreach ($app in $toInstall) {
+            $pct = [int](($counter / $total) * 78) + 12
+            Show-Progress -Current $counter -Total $total -Label "NEW  $($app.name)"
+            $result = winget install --id $app.id `
+                --silent --accept-package-agreements `
+                --accept-source-agreements --disable-interactivity 2>&1
+            if ($LASTEXITCODE -eq 0 -or ($result -match "successfully installed")) {
+                $INSTALLED.Add($app.name) | Out-Null
+                Write-Log "OK  $($app.name) ($($app.id))"
+                Show-Step "$($app.name)" "OK"
+                Update-Dashboard -Phase $DashPhase -Status "running" -Progress $pct `
+                    -LogMessage "⬇ Installed: $($app.name)"
+            } else {
+                $ERRORS.Add("$($app.name) ($($app.id))") | Out-Null
+                Write-Log "FAIL  $($app.name) ($($app.id))"
+                Show-Step "$($app.name)" "FAIL"
+                Update-Dashboard -Phase $DashPhase -Status "running" -Progress $pct `
+                    -LogMessage "✗ Failed: $($app.name)"
+            }
+            $counter++
+        }
+    }
+
+    # ── Then: check for updates on already-installed apps ────────────────────
+    if ($toUpdate.Count -gt 0) {
+        Write-Host ""
+        Write-Host "  ↑  Checking updates for $($toUpdate.Count) existing app(s)" -ForegroundColor Yellow
+        Write-Host ("  " + "─" * 55) -ForegroundColor DarkGray
+        foreach ($app in $toUpdate) {
+            $pct = [int](($counter / $total) * 78) + 12
+            Show-Progress -Current $counter -Total $total -Label "UPDATE  $($app.name)"
+            $result = winget upgrade --id $app.id `
+                --silent --accept-package-agreements `
+                --accept-source-agreements --disable-interactivity 2>&1
+            if ($LASTEXITCODE -eq 0 -or ($result -match "successfully installed")) {
+                $INSTALLED.Add("$($app.name) (updated)") | Out-Null
+                Write-Log "OK (updated)  $($app.name) ($($app.id))"
+                Show-Step "$($app.name) — updated" "OK"
+                Update-Dashboard -Phase $DashPhase -Status "running" -Progress $pct `
+                    -LogMessage "↑ Updated: $($app.name)"
+            } else {
+                # No update available — already on latest version
+                $SKIPPED.Add($app.name) | Out-Null
+                Write-Log "SKIP (up-to-date)  $($app.name) ($($app.id))"
+                Show-Step "$($app.name) — already latest" "SKIP"
+                Update-Dashboard -Phase $DashPhase -Status "running" -Progress $pct `
+                    -LogMessage "─ Already latest: $($app.name)"
+            }
+            $counter++
+        }
+    }
+
+    Write-Host "" ; Write-Host ""
 }
 
 function Set-RegistryValue {
@@ -449,19 +519,15 @@ $coreApps = @(
     @{ id="WireGuard.WireGuard";             name="WireGuard — VPN Client"          }
 )
 
-$total = $coreApps.Count
-$i = 1
-foreach ($app in $coreApps) {
-    Install-App -Id $app.id -Name $app.name -Current $i -Total $total
-    $i++
-}
-Write-Host "" ; Write-Host ""
+Install-PhaseApps -Apps $coreApps -DashPhase 2 -DashLabel "📦 Core Applications"
 
 # ── MYANMAR KEYBOARD INPUT ──
 $myanmarChoice = Select-MyanmarKeyboard
 
 Write-Host "" ; Write-Host "  Phase 3 complete." -ForegroundColor Green
-Update-Dashboard -Phase 2 -Status "done" -Progress 100 -LogMessage "✓ Phase 3 complete — Myanmar keyboard: $myanmarChoice"
+Update-Dashboard -Phase 2 -Status "done" -Progress 100 `
+    -LogMessage "✓ Phase 3 complete — Myanmar keyboard: $myanmarChoice" `
+    -Installed $INSTALLED.Count -Skipped $SKIPPED.Count -Errors $ERRORS.Count
 
 # ══════════════════════════════════════════════════════════════════
 #  PHASE 4 — PYTHON FULL STACK ENVIRONMENT
@@ -480,12 +546,7 @@ $devApps = @(
     @{ id="OpenJS.NodeJS";                  name="Node.js (for Jupyter/web tools)"  }
 )
 
-$total = $devApps.Count ; $i = 1
-foreach ($app in $devApps) {
-    Install-App -Id $app.id -Name $app.name -Current $i -Total $total
-    $i++
-}
-Write-Host "" ; Write-Host ""
+Install-PhaseApps -Apps $devApps -DashPhase 3 -DashLabel "🐍 Python Stack Apps"
 
 # Refresh PATH so Python/pip are available immediately
 Show-Step "Refreshing environment PATH" "WORK"
@@ -622,7 +683,9 @@ __pycache__/
 Show-Step "Project template created at: Desktop\my_python_project" "OK"
 
 Write-Host "" ; Write-Host "  Phase 4 complete." -ForegroundColor Green
-Update-Dashboard -Phase 3 -Status "done" -Progress 100 -LogMessage "✓ Phase 4 complete"
+Update-Dashboard -Phase 3 -Status "done" -Progress 100 `
+    -LogMessage "✓ Phase 4 complete" `
+    -Installed $INSTALLED.Count -Skipped $SKIPPED.Count -Errors $ERRORS.Count
 
 # ══════════════════════════════════════════════════════════════════
 #  PHASE 5 — STUDENT TOOLS
@@ -639,13 +702,11 @@ $studentApps = @(
     @{ id="Docker.DockerDesktop";          name="Docker Desktop — Containers"    }
 )
 
-$total = $studentApps.Count ; $i = 1
-foreach ($app in $studentApps) {
-    Install-App -Id $app.id -Name $app.name -Current $i -Total $total
-    $i++
-}
-Write-Host "" ; Write-Host "" ; Write-Host "  Phase 5 complete." -ForegroundColor Green
-Update-Dashboard -Phase 4 -Status "done" -Progress 100 -LogMessage "✓ Phase 5 complete"
+Install-PhaseApps -Apps $studentApps -DashPhase 4 -DashLabel "🎓 Student Tools"
+Write-Host "  Phase 5 complete." -ForegroundColor Green
+Update-Dashboard -Phase 4 -Status "done" -Progress 100 `
+    -LogMessage "✓ Phase 5 complete" `
+    -Installed $INSTALLED.Count -Skipped $SKIPPED.Count -Errors $ERRORS.Count
 
 # ══════════════════════════════════════════════════════════════════
 #  PHASE 6 — WINDOWS UPDATE & FINALIZATION
