@@ -72,19 +72,19 @@ Write-Host "  File verified ($([math]::Round($fileSize / 1KB, 1)) KB) — OK" -F
 # ══════════════════════════════════════════════════════════════════
 
 # Initialize dashboard state JSON
+# Structure matches what dashboard.html JavaScript expects:
+# d.percent, d.phase, d.installed, d.skipped, d.errors, d.done, d.log[].{time,msg,status}
 $initialState = @{
     startTime = (Get-Date).ToString("o")
-    phases = @(
-        @{ name = "Security Hardening";    status = "waiting"; progress = 0 }
-        @{ name = "Windows Settings";      status = "waiting"; progress = 0 }
-        @{ name = "Core Applications";     status = "waiting"; progress = 0 }
-        @{ name = "Python Full Stack";     status = "waiting"; progress = 0 }
-        @{ name = "Student Tools";         status = "waiting"; progress = 0 }
-        @{ name = "Finalization";          status = "waiting"; progress = 0 }
-    )
-    currentPhase = 0
-    totalProgress = 0
-    log = @()
+    phase     = 0
+    percent   = 0
+    step      = ""
+    installed = 0
+    skipped   = 0
+    errors    = 0
+    done      = $false
+    error     = $false
+    log       = @()
 } | ConvertTo-Json -Depth 4
 $initialState | Set-Content $DASH_LOG -Force
 
@@ -559,7 +559,6 @@ function fmtTime(ms) {
 function setNotice(type, icon, title, desc) {
   const bar = document.getElementById('noticeBar');
   bar.className = 'notice-' + type;
-  document.getElementById('noticeIcon').textContent  = icon;
   document.getElementById('noticeTitle').textContent = title;
   document.getElementById('noticeDesc').textContent  = desc;
 }
@@ -716,10 +715,13 @@ $dashJob = Start-Job -ArgumentList $DASH_PORT, $dashboardHtml, $DASH_LOG -Script
             $ctx = $listener.GetContext()
             $resp = $ctx.Response
             $resp.Headers.Add("Access-Control-Allow-Origin", "*")
+            $resp.Headers.Add("Cache-Control", "no-cache, no-store")
 
-            if ($ctx.Request.Url.AbsolutePath -eq "/api/status") {
-                $resp.ContentType = "application/json"
-                $body = if (Test-Path $logFile) { Get-Content $logFile -Raw } else { '{}' }
+            $path = $ctx.Request.Url.AbsolutePath
+            if ($path -eq "/api/progress" -or $path -eq "/api/status") {
+                # Serve the JSON progress state — field names match dashboard.html JS
+                $resp.ContentType = "application/json; charset=utf-8"
+                $body = if (Test-Path $logFile) { Get-Content $logFile -Raw } else { '{"phase":0,"percent":0,"installed":0,"skipped":0,"errors":0,"done":false,"log":[]}' }
             } else {
                 $resp.ContentType = "text/html; charset=utf-8"
                 $body = $html
@@ -748,55 +750,93 @@ Start-Process "http://localhost:$DASH_PORT"
 $env:WINSETUP_DASH_LOG = $DASH_LOG
 
 function Update-Dashboard {
-    param([int]$Phase, [string]$Status, [int]$Progress, [string]$LogMessage)
+    param(
+        [int]$Phase,
+        [string]$Status,
+        [int]$Progress,
+        [string]$LogMessage,
+        [int]$Installed = -1,
+        [int]$Skipped   = -1,
+        [int]$Errors    = -1,
+        [switch]$Done
+    )
     if (-not (Test-Path $env:WINSETUP_DASH_LOG)) { return }
     try {
         $state = Get-Content $env:WINSETUP_DASH_LOG -Raw | ConvertFrom-Json
-        if ($Phase -ge 0 -and $Phase -lt 6) {
-            $state.phases[$Phase].status   = $Status
-            $state.phases[$Phase].progress = $Progress
-            $state.currentPhase = $Phase
-        }
-        # Calculate total progress
-        $total = 0
-        foreach ($p in $state.phases) { $total += $p.progress }
-        $state.totalProgress = [int]($total / 6)
-        # Append log
+
+        # Update phase / percent fields (these match dashboard.html JS: d.phase, d.percent)
+        $state.phase   = $Phase + 1   # JS uses 1-based phase numbers
+        $state.percent = $Progress
+        if ($LogMessage) { $state.step = $LogMessage }
+
+        # Update counters if provided
+        if ($Installed -ge 0) { $state.installed = $Installed }
+        if ($Skipped   -ge 0) { $state.skipped   = $Skipped   }
+        if ($Errors    -ge 0) { $state.errors     = $Errors    }
+        if ($Done)             { $state.done       = $true      }
+        if ($Status -eq "fail") { $state.error = $true }
+
+        # Append log entry as object (dashboard JS reads .time and .msg and .status)
         if ($LogMessage) {
-            $ts = Get-Date -Format "HH:mm:ss"
-            $logArr = @($state.log)
-            $logArr += "[$ts] $LogMessage"
-            $state.log = $logArr
+            $ts     = Get-Date -Format "HH:mm:ss"
+            $logSt  = switch ($Status) {
+                "done"    { "OK"   }
+                "running" { "WORK" }
+                "fail"    { "FAIL" }
+                default   { "INFO" }
+            }
+            $logArr = [System.Collections.Generic.List[object]]::new()
+            if ($state.log) { $state.log | ForEach-Object { $logArr.Add($_) } }
+            $logArr.Add([PSCustomObject]@{ time = $ts; msg = $LogMessage; status = $logSt })
+            $state.log = $logArr.ToArray()
         }
+
         $state | ConvertTo-Json -Depth 4 | Set-Content $env:WINSETUP_DASH_LOG -Force
     } catch { }
 }
-
-# Export function for the main script
-Export-ModuleMember -Function Update-Dashboard -ErrorAction SilentlyContinue
-# Save function definition to temp so main script can dot-source it
+# Save function definition to temp file so WindowsSetup_Pro.ps1 can dot-source it
 @'
 function Update-Dashboard {
-    param([int]$Phase, [string]$Status, [int]$Progress, [string]$LogMessage)
+    param(
+        [int]$Phase,
+        [string]$Status,
+        [int]$Progress,
+        [string]$LogMessage,
+        [int]$Installed = -1,
+        [int]$Skipped   = -1,
+        [int]$Errors    = -1,
+        [switch]$Done
+    )
     $dashLog = $env:WINSETUP_DASH_LOG
     if (-not $dashLog -or -not (Test-Path $dashLog)) { return }
     try {
         $state = Get-Content $dashLog -Raw | ConvertFrom-Json
-        if ($Phase -ge 0 -and $Phase -lt 6) {
-            $state.phases[$Phase].status   = $Status
-            $state.phases[$Phase].progress = $Progress
-            $state.currentPhase = $Phase
-        }
-        $total = 0
-        foreach ($p in $state.phases) { $total += $p.progress }
-        $state.totalProgress = [int]($total / 6)
+
+        # d.phase is 1-based in the JS (phase 1..6)
+        $state.phase   = $Phase + 1
+        $state.percent = $Progress
+        if ($LogMessage) { $state.step = $LogMessage }
+
+        if ($Installed -ge 0) { $state.installed = $Installed }
+        if ($Skipped   -ge 0) { $state.skipped   = $Skipped   }
+        if ($Errors    -ge 0) { $state.errors     = $Errors    }
+        if ($Done)             { $state.done       = $true      }
+        if ($Status -eq "fail") { $state.error = $true }
+
         if ($LogMessage) {
-            $ts = Get-Date -Format "HH:mm:ss"
-            $logArr = [System.Collections.Generic.List[string]]::new()
+            $ts    = Get-Date -Format "HH:mm:ss"
+            $logSt = switch ($Status) {
+                "done"    { "OK"   }
+                "running" { "WORK" }
+                "fail"    { "FAIL" }
+                default   { "INFO" }
+            }
+            $logArr = [System.Collections.Generic.List[object]]::new()
             if ($state.log) { $state.log | ForEach-Object { $logArr.Add($_) } }
-            $logArr.Add("[$ts] $LogMessage")
+            $logArr.Add([PSCustomObject]@{ time = $ts; msg = $LogMessage; status = $logSt })
             $state.log = $logArr.ToArray()
         }
+
         $state | ConvertTo-Json -Depth 4 | Set-Content $dashLog -Force
     } catch { }
 }
@@ -828,8 +868,8 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 & $TEMP_PATH
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
-# Mark all phases complete on dashboard
-Update-Dashboard -Phase 5 -Status "done" -Progress 100 -LogMessage "✓ Setup complete!"
+# Mark setup as fully complete on dashboard
+Update-Dashboard -Phase 5 -Status "done" -Progress 100 -LogMessage "✓ Setup complete! Restart your PC." -Done
 Start-Sleep -Seconds 5
 
 Stop-Job $dashJob -ErrorAction SilentlyContinue

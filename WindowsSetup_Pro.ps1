@@ -19,28 +19,19 @@ $ProgressPreference    = "SilentlyContinue"
 if (Test-Path "$env:TEMP\Update-Dashboard.ps1") {
     . "$env:TEMP\Update-Dashboard.ps1"
 } else {
+    # Fallback stub (used when run standalone without install.ps1)
     function Update-Dashboard {
         param(
             [int]$Phase,
             [string]$Status,
             [int]$Progress,
-            [string]$LogMessage
+            [string]$LogMessage,
+            [int]$Installed = -1,
+            [int]$Skipped   = -1,
+            [int]$Errors    = -1,
+            [switch]$Done
         )
-        if ($null -ne $global:State) {
-            $global:State.Phase   = $Phase
-            $global:State.Percent = $Progress
-            $global:State.Step    = $LogMessage
-            $global:State.Log.Add(@{
-                time   = (Get-Date -Format "HH:mm:ss")
-                msg    = $LogMessage
-                status = switch ($Status) {
-                    "done"    { "OK"   }
-                    "running" { "WORK" }
-                    "fail"    { "FAIL" }
-                    default   { "INFO" }
-                }
-            }) | Out-Null
-        }
+        # No-op: no dashboard running in standalone mode
     }
 }
 

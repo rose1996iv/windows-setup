@@ -467,7 +467,6 @@ function fmtTime(ms) {
 function setNotice(type, icon, title, desc) {
   const bar = document.getElementById('noticeBar');
   bar.className = 'notice-' + type;
-  document.getElementById('noticeIcon').textContent  = icon;
   document.getElementById('noticeTitle').textContent = title;
   document.getElementById('noticeDesc').textContent  = desc;
 }
