@@ -96,108 +96,608 @@ $dashboardHtml = @'
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Windows Setup — Live Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',sans-serif;background:#0a0a0f;color:#f0f0f5;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:40px 20px}
-.header{text-align:center;margin-bottom:40px}
-.header h1{font-size:1.6rem;font-weight:800;letter-spacing:-0.5px;margin-bottom:4px}
-.header h1 span{background:linear-gradient(135deg,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.header p{color:#8888a0;font-size:.85rem}
-.live-badge{display:inline-flex;align-items:center;gap:8px;padding:4px 14px;border-radius:100px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);font-size:.75rem;color:#10b981;margin-bottom:16px;font-weight:600}
-.live-badge .dot{width:8px;height:8px;border-radius:50%;background:#10b981;animation:blink 1.5s infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
-.card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:28px;width:100%;max-width:600px;margin-bottom:20px}
-.overall{margin-bottom:8px;display:flex;justify-content:space-between;align-items:baseline}
-.overall-pct{font-size:2rem;font-weight:800;background:linear-gradient(135deg,#3b82f6,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.overall-label{color:#8888a0;font-size:.8rem}
-.bar-track{height:8px;border-radius:4px;background:rgba(255,255,255,.06);overflow:hidden;margin-bottom:28px}
-.bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#3b82f6,#8b5cf6,#06b6d4);transition:width .8s ease;width:0}
-.phase{display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04)}
-.phase:last-child{border-bottom:none}
-.phase-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0}
-.phase-icon.waiting{background:rgba(255,255,255,.04);color:#8888a0}
-.phase-icon.running{background:rgba(59,130,246,.15);color:#3b82f6;animation:pulse 1.5s infinite}
-.phase-icon.done{background:rgba(16,185,129,.15);color:#10b981}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-.phase-info{flex:1}
-.phase-name{font-size:.85rem;font-weight:600}
-.phase-bar{height:4px;border-radius:2px;background:rgba(255,255,255,.06);margin-top:6px;overflow:hidden}
-.phase-bar-fill{height:100%;border-radius:2px;transition:width .6s ease}
-.phase-bar-fill.waiting{background:transparent;width:0}
-.phase-bar-fill.running{background:linear-gradient(90deg,#3b82f6,#06b6d4)}
-.phase-bar-fill.done{background:#10b981;width:100%}
-.phase-pct{font-size:.75rem;font-weight:600;color:#8888a0;min-width:36px;text-align:right;font-family:'JetBrains Mono',monospace}
-.log-card{max-height:200px;overflow-y:auto}
-.log-card::-webkit-scrollbar{width:4px}
-.log-card::-webkit-scrollbar-track{background:transparent}
-.log-card::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
-.log-title{font-size:.8rem;font-weight:600;color:#8888a0;margin-bottom:12px}
-.log-entry{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:#8888a0;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03)}
-.log-entry .ok{color:#10b981}
-.log-entry .fail{color:#ef4444}
-.log-entry .time{color:#3b82f6}
-.elapsed{text-align:center;margin-top:16px;font-size:.8rem;color:#8888a0;font-family:'JetBrains Mono',monospace}
+:root {
+  --bg:      #070B14;
+  --bg2:     #0C1220;
+  --bg3:     #111827;
+  --border:  #1E293B;
+  --border2: #263347;
+  --text:    #E2E8F0;
+  --muted:   #64748B;
+  --dim:     #334155;
+  --green:   #22D3A5;
+  --blue:    #38BDF8;
+  --purple:  #A78BFA;
+  --amber:   #FCD34D;
+  --red:     #F87171;
+  --pink:    #F472B6;
+  --mono:    'Space Mono', monospace;
+  --sans:    'DM Sans', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Animated grid background ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(56,189,248,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56,189,248,.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Orb glow ── */
+.orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+  animation: orbFloat 8s ease-in-out infinite;
+}
+.orb-1 { width:320px;height:320px;background:rgba(34,211,165,.06);top:-80px;right:10%;animation-delay:0s; }
+.orb-2 { width:280px;height:280px;background:rgba(167,139,250,.05);bottom:10%;left:-60px;animation-delay:-3s; }
+.orb-3 { width:200px;height:200px;background:rgba(56,189,248,.04);top:40%;right:5%;animation-delay:-5s; }
+@keyframes orbFloat {
+  0%,100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-30px) scale(1.05); }
+}
+
+/* ── Layout ── */
+.wrap { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 24px 20px 40px; }
+
+/* ── Header ── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+  background: rgba(12,18,32,.7);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  margin-bottom: 20px;
+  animation: fadeDown .5s ease both;
+}
+.header-left { display:flex; align-items:center; gap:12px; }
+.pulse-ring {
+  position: relative; width: 10px; height: 10px;
+}
+.pulse-ring::before {
+  content:''; position:absolute; inset:0;
+  border-radius:50%; background:var(--green);
+  animation: pulseRing 2s ease-out infinite;
+}
+.pulse-ring::after {
+  content:''; position:absolute; inset:-4px;
+  border-radius:50%; border:2px solid var(--green);
+  animation: pulseRing 2s ease-out infinite .4s;
+  opacity:0;
+}
+@keyframes pulseRing {
+  0%   { transform:scale(1); opacity:1; }
+  100% { transform:scale(2.2); opacity:0; }
+}
+.header-title { font-family:var(--mono); font-size:13px; font-weight:700; color:var(--text); letter-spacing:-.3px; }
+.header-sub   { font-size:11.5px; color:var(--muted); margin-top:1px; }
+#statusBadge  {
+  font-family:var(--mono); font-size:11px; padding:5px 14px;
+  border-radius:20px; border:1px solid; transition:all .4s;
+}
+.badge-run  { background:rgba(34,211,165,.08);  border-color:rgba(34,211,165,.3);  color:var(--green); }
+.badge-done { background:rgba(56,189,248,.08);  border-color:rgba(56,189,248,.3);  color:var(--blue); }
+.badge-err  { background:rgba(248,113,113,.08); border-color:rgba(248,113,113,.3); color:var(--red); }
+
+/* ── Notice bar ── */
+#noticeBar {
+  border-radius: 12px;
+  padding: 13px 18px;
+  margin-bottom: 16px;
+  border: 1px solid;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  animation: fadeDown .4s ease both .1s;
+  transition: all .4s ease;
+}
+.notice-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.notice-text { flex: 1; }
+.notice-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.notice-desc  { font-size: 12px; line-height: 1.5; opacity: .85; }
+.notice-tip   { background:rgba(252,211,77,.06);  border-color:rgba(252,211,77,.25);  color:#FCD34D; }
+.notice-warn  { background:rgba(248,113,113,.06); border-color:rgba(248,113,113,.25); color:#F87171; }
+.notice-info  { background:rgba(56,189,248,.06);  border-color:rgba(56,189,248,.25);  color:#38BDF8; }
+.notice-done  { background:rgba(34,211,165,.06);  border-color:rgba(34,211,165,.25);  color:#22D3A5; }
+
+/* ── Main grid ── */
+.grid { display: grid; grid-template-columns: 1fr 320px; gap: 16px; }
+
+/* ── Card ── */
+.card {
+  background: rgba(12,18,32,.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  animation: fadeUp .5s ease both;
+}
+.card-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+/* ── Overall progress ── */
+.progress-wrap { margin-bottom: 20px; }
+.progress-meta { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-bottom:8px; }
+.progress-meta strong { color:var(--text); }
+.track {
+  height: 8px; background: var(--bg3);
+  border-radius: 4px; overflow: hidden;
+  position: relative;
+}
+.track::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.04) 50%, transparent 100%);
+  animation: shimmer 2s linear infinite;
+}
+@keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+.fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--green), var(--blue));
+  border-radius: 4px;
+  transition: width .6s cubic-bezier(.4,0,.2,1);
+  position: relative;
+}
+.fill::after {
+  content:'';
+  position:absolute; right:0; top:50%;
+  transform:translate(50%,-50%);
+  width:14px; height:14px;
+  border-radius:50%;
+  background:var(--blue);
+  box-shadow: 0 0 10px var(--blue), 0 0 20px rgba(56,189,248,.4);
+  transition: opacity .3s;
+}
+
+/* ── Phase list ── */
+.phase-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  margin-bottom: 8px;
+  transition: all .35s ease;
+  position: relative;
+  overflow: hidden;
+}
+.phase-item::before {
+  content:'';
+  position:absolute; left:0; top:0; bottom:0;
+  width:3px; border-radius:2px;
+  transition: all .3s;
+}
+.phase-done   { background:rgba(34,211,165,.04);  border-color:rgba(34,211,165,.15); }
+.phase-done::before   { background:var(--green); }
+.phase-active { background:rgba(56,189,248,.06);  border-color:rgba(56,189,248,.3); box-shadow:0 0 20px rgba(56,189,248,.08); }
+.phase-active::before { background:var(--blue); }
+.phase-pending{ opacity:.35; }
+.phase-icon { font-size:18px; flex-shrink:0; }
+.phase-body { flex:1; min-width:0; }
+.phase-name { font-size:13px; font-weight:500; }
+.phase-step { font-size:11px; color:var(--muted); font-family:var(--mono); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.phase-check { font-size:14px; margin-left:auto; flex-shrink:0; }
+
+/* ── Spinner ── */
+.spinner {
+  width:14px; height:14px;
+  border:2px solid rgba(56,189,248,.2);
+  border-top-color:var(--blue);
+  border-radius:50%;
+  animation:spin .7s linear infinite;
+  flex-shrink:0;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* ── Stats ── */
+.stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:16px; }
+.stat-card {
+  background:var(--bg3); border-radius:10px;
+  padding:12px 14px; text-align:center;
+  border:1px solid var(--border);
+}
+.stat-num { font-family:var(--mono); font-size:22px; font-weight:700; }
+.stat-num.c-green{color:var(--green)} .stat-num.c-red{color:var(--red)}
+.stat-num.c-amber{color:var(--amber)} .stat-num.c-blue{color:var(--blue)}
+.stat-lbl { font-size:11px; color:var(--muted); margin-top:3px; }
+
+/* ── Log panel ── */
+.log-panel { display:flex; flex-direction:column; }
+.log-body {
+  flex:1; overflow-y:auto;
+  font-family:var(--mono);
+  font-size:11.5px; line-height:2;
+  max-height:460px;
+  padding-right:4px;
+}
+.log-body::-webkit-scrollbar{width:3px}
+.log-body::-webkit-scrollbar-track{background:transparent}
+.log-body::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
+.log-entry { display:flex; gap:8px; padding:1px 0; animation:fadeIn .2s ease; }
+.log-time  { color:var(--dim); flex-shrink:0; }
+.log-ok    { color:var(--green); }
+.log-work  { color:var(--amber); }
+.log-fail  { color:var(--red); }
+.log-info  { color:var(--blue); }
+.log-skip  { color:var(--muted); }
+@keyframes fadeIn { from{opacity:0;transform:translateX(-4px)} to{opacity:1;transform:none} }
+
+/* ── Cursor blink ── */
+.cursor {
+  display:inline-block; width:7px; height:12px;
+  background:var(--blue); vertical-align:-2px;
+  animation:blink 1.1s infinite;
+}
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+
+/* ── Tips ticker ── */
+.tips-wrap {
+  margin-top:16px;
+  padding:12px 16px;
+  background:rgba(167,139,250,.05);
+  border:1px solid rgba(167,139,250,.2);
+  border-radius:10px;
+  min-height:64px;
+}
+.tips-label { font-size:10px; font-family:var(--mono); letter-spacing:1.5px; color:var(--purple); text-transform:uppercase; margin-bottom:6px; }
+.tips-text  { font-size:12.5px; color:var(--muted); line-height:1.6; transition:all .4s; }
+
+/* ── Done banner ── */
+#doneBanner {
+  display:none; margin-top:16px;
+  padding:20px; text-align:center;
+  border-top:1px solid var(--border);
+}
+#doneBanner.show { display:block; animation:fadeUp .5s ease; }
+.done-title { font-size:22px; font-weight:600; margin-bottom:6px; }
+.done-sub   { font-size:13px; color:var(--muted); }
+.restart-pill {
+  display:inline-block; margin-top:14px;
+  background:rgba(34,211,165,.08);
+  border:1px solid rgba(34,211,165,.25);
+  color:var(--green); font-family:var(--mono);
+  font-size:11.5px; padding:8px 20px; border-radius:20px;
+}
+
+/* ── Elapsed ── */
+.elapsed { font-family:var(--mono); font-size:12px; color:var(--dim); text-align:right; margin-top:10px; }
+
+/* ── Animations ── */
+@keyframes fadeDown { from{opacity:0;transform:translateY(-12px)} to{opacity:1;transform:none} }
+@keyframes fadeUp   { from{opacity:0;transform:translateY(12px)}  to{opacity:1;transform:none} }
+
+@media(max-width:720px){
+  .grid{grid-template-columns:1fr;}
+  .log-panel{grid-row:auto;}
+}
 </style>
 </head>
 <body>
-<div class="header">
-    <div class="live-badge"><span class="dot"></span> LIVE</div>
-    <h1><span>WinSetup</span> Pro — Dashboard</h1>
-    <p>Real-time progress · Auto-refreshes every 2s</p>
-</div>
-<div class="card">
-    <div class="overall">
-        <span class="overall-pct" id="totalPct">0%</span>
-        <span class="overall-label" id="phaseLabel">Starting...</span>
+
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+<div class="orb orb-3"></div>
+
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div class="header-left">
+      <div class="pulse-ring"></div>
+      <div>
+        <div class="header-title">Windows Professional Setup</div>
+        <div class="header-sub">github.com/rose1996iv/windows-setup</div>
+      </div>
     </div>
-    <div class="bar-track"><div class="bar-fill" id="totalBar"></div></div>
-    <div id="phases"></div>
+    <div id="statusBadge" class="badge-run">● Installing...</div>
+  </header>
+
+  <!-- Notice bar -->
+  <div id="noticeBar" class="notice-tip">
+    <div class="notice-icon">💡</div>
+    <div class="notice-text">
+      <div class="notice-title" id="noticeTitle">Getting started...</div>
+      <div class="notice-desc" id="noticeDesc">Preparing your system for setup.</div>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- Left: phases + stats -->
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title">Overall Progress</div>
+
+        <div class="progress-wrap">
+          <div class="progress-meta">
+            <span id="progLabel">Phase <strong id="progCurrent">0</strong> / 6</span>
+            <span id="progPct">0%</span>
+          </div>
+          <div class="track">
+            <div class="fill" id="progFill" style="width:0%"></div>
+          </div>
+        </div>
+
+        <div id="phaseList"></div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-num c-green" id="sInstalled">0</div>
+            <div class="stat-lbl">Installed</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num c-amber" id="sSkipped">0</div>
+            <div class="stat-lbl">Skipped</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num c-red" id="sErrors">0</div>
+            <div class="stat-lbl">Errors</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num c-blue" id="sElapsed">0:00</div>
+            <div class="stat-lbl">Elapsed</div>
+          </div>
+        </div>
+
+        <!-- Tips ticker -->
+        <div class="tips-wrap">
+          <div class="tips-label">💜 Did you know?</div>
+          <div class="tips-text" id="tipsText">Loading tip...</div>
+        </div>
+
+        <div id="doneBanner">
+          <div class="done-title">✓ Setup Complete!</div>
+          <div class="done-sub">All phases finished. Your system is ready.</div>
+          <div class="restart-pill">⚠ Restart your PC to apply all changes</div>
+        </div>
+
+        <div class="elapsed" id="elapsedFull">Started just now</div>
+      </div>
+    </div>
+
+    <!-- Right: live log -->
+    <div class="card log-panel" style="animation-delay:.1s;">
+      <div class="card-title">Live Log</div>
+      <div class="log-body" id="logBody">
+        <div class="log-entry">
+          <span class="log-time">--:--:--</span>
+          <span class="log-info">Connecting to dashboard... <span class="cursor"></span></span>
+        </div>
+      </div>
+    </div>
+
+  </div>
 </div>
-<div class="card log-card">
-    <div class="log-title">Activity Log</div>
-    <div id="logEntries"></div>
-</div>
-<div class="elapsed" id="elapsed"></div>
+
 <script>
-const icons = ['🔒','⚙️','📦','🐍','🎓','🔄'];
-function render(d) {
-    document.getElementById('totalPct').textContent = d.totalProgress + '%';
-    document.getElementById('totalBar').style.width = d.totalProgress + '%';
-    const cp = d.currentPhase;
-    document.getElementById('phaseLabel').textContent = cp < 6 ? 'Phase ' + (cp+1) + '/6 — ' + d.phases[cp].name : 'Complete!';
-    let ph = '';
-    d.phases.forEach((p, i) => {
-        const s = p.status;
-        ph += '<div class="phase">';
-        ph += '<div class="phase-icon ' + s + '">' + icons[i] + '</div>';
-        ph += '<div class="phase-info"><div class="phase-name">' + p.name + '</div>';
-        ph += '<div class="phase-bar"><div class="phase-bar-fill ' + s + '" style="width:' + p.progress + '%"></div></div></div>';
-        ph += '<div class="phase-pct">' + (s === 'done' ? '✓' : p.progress + '%') + '</div>';
-        ph += '</div>';
-    });
-    document.getElementById('phases').innerHTML = ph;
-    if (d.log && d.log.length) {
-        let lg = '';
-        d.log.slice(-30).reverse().forEach(l => {
-            const cls = l.includes('✓') ? 'ok' : l.includes('✗') ? 'fail' : 'time';
-            lg += '<div class="log-entry"><span class="' + cls + '">' + l + '</span></div>';
-        });
-        document.getElementById('logEntries').innerHTML = lg;
-    }
-    if (d.startTime) {
-        const sec = Math.floor((Date.now() - new Date(d.startTime).getTime()) / 1000);
-        const m = Math.floor(sec / 60), s2 = sec % 60;
-        document.getElementById('elapsed').textContent = 'Elapsed: ' + m + 'm ' + s2 + 's';
-    }
+// ── Config ──────────────────────────────────────────────────────
+const PHASES = [
+  { icon:'🔒', name:'Security Hardening' },
+  { icon:'⚙️', name:'Windows Settings'   },
+  { icon:'📦', name:'Core Applications'  },
+  { icon:'🐍', name:'Python Environment' },
+  { icon:'🎓', name:'Student Tools'      },
+  { icon:'🔄', name:'Update & Finalize'  },
+];
+
+const TIPS = [
+  "Bitwarden ကို install ပြီးရင် browser extension လည်း ထည့်ပါ — password autofill အဆင်ပြေမယ်",
+  "Malwarebytes ကို weekly scan schedule ချပေးပါ — Settings → Scheduler",
+  "VS Code မှာ Ctrl+` နဲ့ integrated terminal ဖွင့်လို့ရတယ် — PowerShell ထပ် မဖွင့်ရတော့ဘူး",
+  "Obsidian မှာ Zettelkasten method သုံးကြည့်ပါ — note ချိတ်ဆက်မှု တော်သွားလိမ့်မယ်",
+  "Anki flashcard မှာ image + audio ထည့်ရင် retention rate 40% ကျော် မြင့်တက်တယ်",
+  "PyCharm Professional ကို student email နဲ့ JetBrains မှာ free ရနိုင်တယ်",
+  "Git blame = 'ဒါ ဘယ်သူ ရေးလဲ?' — git log = 'ဘာ ဖြစ်ခဲ့လဲ?' — မှတ်ထားပါ",
+  "winget upgrade --all ဆိုတဲ့ command တစ်ကြောင်းနဲ့ app အကုန် update ပြုလုပ်နိုင်တယ်",
+  "Cloudflare 1.1.1.1 DNS ကို ဒီ setup မှာ set လုပ်ပြီး — browsing မြန်သွားပါမယ်",
+  "Jupyter Notebook မှာ Shift+Enter = run cell, Ctrl+Enter = run without moving",
+  "Python venv ကို project တိုင်းအတွက် သီးသန့် ဆောက်ပါ — package conflict မဖြစ်ဘူး",
+  "WireGuard VPN ဟာ OpenVPN ထက် 3x မြန်ပြီး battery drain လည်း နည်းတယ်",
+  "Docker Desktop install ပြီးရင် WSL2 backend on ထားပါ — faster performance",
+  "Everything search မှာ file name ရိုက်ရုံနဲ့ တစ်ကျော့ချင်း results ထွက်တယ် — Windows Search ထက် 100x မြန်တယ်",
+  "Ctrl+Shift+V နဲ့ VS Code မှာ Markdown preview တိုက်ရိုက် ကြည့်နိုင်တယ်",
+];
+
+// ── State ────────────────────────────────────────────────────────
+let lastLog    = 0;
+let startTime  = Date.now();
+let tipIndex   = 0;
+let tipTimer   = null;
+let pollTimer  = null;
+let isDone     = false;
+
+const NOTICES = {
+  0: { type:'info',  icon:'⚙️',  title:'System preparation',         desc:'winget updating... security hardening running soon.' },
+  1: { type:'warn',  icon:'🔒',  title:'Security phase — stay online', desc:'Defender, Firewall, ASR rules being configured. Do NOT close PowerShell.' },
+  2: { type:'tip',   icon:'💡',  title:'Windows settings applying',   desc:'Dark mode, Explorer settings, DNS — taking effect soon.' },
+  3: { type:'info',  icon:'📦',  title:'App installation in progress', desc:'Sit back and relax. Chrome, LibreOffice, Telegram and more being installed.' },
+  4: { type:'warn',  icon:'🐍',  title:'Python environment',          desc:'30+ packages downloading. May take 10–15 min. Keep internet connection stable.' },
+  5: { type:'tip',   icon:'🎓',  title:'Almost there!',               desc:'Student tools installing. Obsidian, Anki, Docker, Postman...' },
+  6: { type:'done',  icon:'✅',  title:'Windows Update running',      desc:'Final updates being applied. PC restart will be required.' },
+};
+
+// ── Helpers ──────────────────────────────────────────────────────
+function fmtTime(ms) {
+  const s = Math.floor(ms / 1000);
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 }
+
+function setNotice(type, icon, title, desc) {
+  const bar = document.getElementById('noticeBar');
+  bar.className = 'notice-' + type;
+  document.getElementById('noticeIcon').textContent  = icon;
+  document.getElementById('noticeTitle').textContent = title;
+  document.getElementById('noticeDesc').textContent  = desc;
+}
+
+function rotateTip() {
+  const el = document.getElementById('tipsText');
+  el.style.opacity = '0';
+  setTimeout(() => {
+    tipIndex = (tipIndex + 1) % TIPS.length;
+    el.textContent = TIPS[tipIndex];
+    el.style.opacity = '1';
+  }, 400);
+}
+
+function buildPhaseList(activePhase, activeStep) {
+  return PHASES.map((p, i) => {
+    const phaseNum = i + 1;
+    const done     = phaseNum < activePhase;
+    const active   = phaseNum === activePhase;
+    const cls      = done ? 'phase-done' : active ? 'phase-active' : 'phase-pending';
+    const check    = done   ? '<span style="color:var(--green)">✓</span>'
+                   : active ? '<div class="spinner"></div>'
+                   : '';
+    const step     = active && activeStep
+                   ? `<div class="phase-step">${activeStep}</div>` : '';
+    return `
+      <div class="phase-item ${cls}">
+        <div class="phase-icon">${p.icon}</div>
+        <div class="phase-body">
+          <div class="phase-name">${p.name}</div>${step}
+        </div>
+        <div class="phase-check">${check}</div>
+      </div>`;
+  }).join('');
+}
+
+function appendLog(entries, from) {
+  const body = document.getElementById('logBody');
+  if (from === 0) body.innerHTML = '';
+  for (let i = from; i < entries.length; i++) {
+    const e = entries[i];
+    const cls = e.status === 'OK'   ? 'log-ok'
+              : e.status === 'FAIL' ? 'log-fail'
+              : e.status === 'SKIP' ? 'log-skip'
+              : e.status === 'INFO' ? 'log-info'
+              : 'log-work';
+    const sym = e.status === 'OK'   ? '✓'
+              : e.status === 'FAIL' ? '✗'
+              : e.status === 'SKIP' ? '─'
+              : e.status === 'INFO' ? 'ℹ'
+              : '○';
+    body.innerHTML +=
+      `<div class="log-entry">
+         <span class="log-time">${e.time}</span>
+         <span class="${cls}">${sym} ${e.msg}</span>
+       </div>`;
+  }
+  body.scrollTop = body.scrollHeight;
+}
+
+// ── Poll ─────────────────────────────────────────────────────────
 async function poll() {
-    try {
-        const r = await fetch('/api/status?' + Date.now());
-        if (r.ok) render(await r.json());
-    } catch(e) {}
-    setTimeout(poll, 2000);
+  try {
+    const r = await fetch('/api/progress');
+    if (!r.ok) throw new Error();
+    const d = await r.json();
+
+    // Progress bar
+    const pct = d.percent || 0;
+    document.getElementById('progFill').style.width  = pct + '%';
+    document.getElementById('progPct').textContent   = pct + '%';
+    document.getElementById('progCurrent').textContent = d.phase || 0;
+
+    // Phases
+    document.getElementById('phaseList').innerHTML =
+      buildPhaseList(d.phase || 0, d.step || '');
+
+    // Stats
+    document.getElementById('sInstalled').textContent = d.installed || 0;
+    document.getElementById('sSkipped').textContent   = d.skipped   || 0;
+    document.getElementById('sErrors').textContent    = d.errors    || 0;
+    document.getElementById('sElapsed').textContent   = fmtTime(Date.now() - startTime);
+    document.getElementById('elapsedFull').textContent =
+      `Elapsed: ${fmtTime(Date.now() - startTime)}`;
+
+    // Notice
+    const n = NOTICES[d.phase] || NOTICES[0];
+    const bar = document.getElementById('noticeBar');
+    bar.className = 'notice-' + n.type;
+    document.getElementById('noticeTitle').textContent = n.title;
+    document.getElementById('noticeDesc').textContent  = n.desc;
+
+    // Log
+    if (d.log && d.log.length > lastLog) {
+      appendLog(d.log, lastLog);
+      lastLog = d.log.length;
+    }
+
+    // Done state
+    if (d.done && !isDone) {
+      isDone = true;
+      clearInterval(tipTimer);
+      const badge = document.getElementById('statusBadge');
+      badge.className   = 'badge-done';
+      badge.textContent = '✓  Complete';
+      document.getElementById('doneBanner').classList.add('show');
+      document.getElementById('progFill').style.background = 'linear-gradient(90deg, var(--green), var(--blue))';
+      const bar = document.getElementById('noticeBar');
+      bar.className = 'notice-done';
+      document.getElementById('noticeTitle').textContent = '🎉 Setup finished!';
+      document.getElementById('noticeDesc').textContent  =
+        'All apps installed and system configured. Please restart your PC to apply all changes.';
+      return;
+    }
+
+    if (d.error) {
+      const badge = document.getElementById('statusBadge');
+      badge.className   = 'badge-err';
+      badge.textContent = '✗  Error';
+      const bar = document.getElementById('noticeBar');
+      bar.className = 'notice-warn';
+      document.getElementById('noticeTitle').textContent = 'An error occurred';
+      document.getElementById('noticeDesc').textContent  =
+        'Check the log panel. Some steps may have failed. The setup will continue.';
+    }
+
+  } catch (_) {}
+
+  if (!isDone) pollTimer = setTimeout(poll, 1500);
 }
+
+// ── Init ─────────────────────────────────────────────────────────
+document.getElementById('tipsText').textContent = TIPS[0];
+tipTimer = setInterval(rotateTip, 7000);
+
+// Build initial phase list
+document.getElementById('phaseList').innerHTML = buildPhaseList(0, '');
+
 poll();
 </script>
 </body>
