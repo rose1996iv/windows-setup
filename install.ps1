@@ -46,7 +46,9 @@ Write-Host "  winget found — OK" -ForegroundColor Green
 # ── Download main script ─────────────────────────────────────────────────────
 Write-Host "  Downloading setup script from GitHub..." -ForegroundColor Gray
 try {
-    Invoke-RestMethod -Uri "$REPO_RAW/$SCRIPT" -OutFile $TEMP_PATH -UseBasicParsing
+    $scriptText = Invoke-RestMethod -Uri "$REPO_RAW/$SCRIPT" -UseBasicParsing
+    $utf8BOM = New-Object System.Text.UTF8Encoding($true)
+    [System.IO.File]::WriteAllText($TEMP_PATH, $scriptText, $utf8BOM)
     Write-Host "  Download complete — OK" -ForegroundColor Green
 } catch {
     Write-Host ""
