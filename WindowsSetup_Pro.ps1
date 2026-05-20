@@ -431,9 +431,19 @@ if ($os.Build -lt 19041) {
     Write-Host "  [WARN] Windows build $($os.Build) detected. Some features need Windows 10 21H2+." -ForegroundColor Yellow
 }
 
-# Update winget sources silently
+# Update winget sources with a 30-second timeout
+Update-Dashboard -Phase 0 -Status "running" -Progress 2 -LogMessage "⏳ Refreshing winget sources..."
 Write-Host "  Refreshing winget sources..." -ForegroundColor DarkGray
-winget source update 2>&1 | Out-Null
+$wgJob = Start-Job { winget source update --disable-interactivity 2>&1 }
+$wgDone = Wait-Job $wgJob -Timeout 30
+if (-not $wgDone) {
+    Stop-Job $wgJob
+    Write-Host "  [WARN] winget source update timed out, continuing anyway." -ForegroundColor Yellow
+    Update-Dashboard -Phase 0 -Status "running" -Progress 4 -LogMessage "⚠ Winget source update timed out (skipped)"
+} else {
+    Receive-Job $wgJob | Out-Null
+}
+Remove-Job $wgJob -Force
 
 Write-Host "  Prerequisites OK  —  Starting setup" -ForegroundColor Green
 Start-Sleep -Seconds 1
