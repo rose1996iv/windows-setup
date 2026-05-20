@@ -908,14 +908,7 @@ Write-Host "  │  This will install apps and modify system settings.     │" -
 Write-Host "  │  Estimated time: 25–35 minutes.                         │" -ForegroundColor Yellow
 Write-Host "  └─────────────────────────────────────────────────────────┘" -ForegroundColor Yellow
 Write-Host ""
-$confirm = Read-Host "  Proceed? [Y/N]"
-if ($confirm -notmatch "^[Yy]$") {
-    Write-Host "  Cancelled. Run again when ready." -ForegroundColor Gray
-    Stop-Job $dashJob -ErrorAction SilentlyContinue
-    Remove-Job $dashJob -Force -ErrorAction SilentlyContinue
-    Remove-Item $TEMP_PATH -Force -ErrorAction SilentlyContinue
-    exit 0
-}
+# (Removed manual confirmation prompt to ensure true one-click execution)
 
 # ── Execute ──────────────────────────────────────────────────────────────────
 Write-Host ""

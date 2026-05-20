@@ -358,56 +358,11 @@ function Install-MyanmarKeyboardApp {
 }
 
 function Select-MyanmarKeyboard {
-    Clear-Host
     Write-Host ""
-    Write-Host "  ╔══════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "  ║     Myanmar Keyboard Input — Select One      ║" -ForegroundColor Cyan
-    Write-Host "  ╠══════════════════════════════════════════════╣" -ForegroundColor Cyan
-    Write-Host "  ║  [1]  KeyMagic   (lightweight, open source)  ║" -ForegroundColor White
-    Write-Host "  ║  [2]  Keyman     (feature-rich, Unicode)     ║" -ForegroundColor White
-    Write-Host "  ║  [3]  Both       (install both)              ║" -ForegroundColor White
-    Write-Host "  ║  [S]  Skip       (install neither)           ║" -ForegroundColor White
-    Write-Host "  ╚══════════════════════════════════════════════╝" -ForegroundColor Cyan
-    Write-Host ""
-
-    $choice = $null
-    while (-not $choice) {
-        $input = Read-Host "  Choose [1/2/3/S]"
-        switch -Regex ($input.Trim()) {
-            '^[1]$'    { $choice = '1' }
-            '^[2]$'    { $choice = '2' }
-            '^[3]$'    { $choice = '3' }
-            '^[sS]$'   { $choice = 'S' }
-            default    { Write-Host "  Invalid selection. Please press 1, 2, 3, or S." -ForegroundColor Yellow }
-        }
-    }
-
-    Write-Host ""
-    $resultLabel = "Skipped"
-    switch ($choice) {
-        '1' {
-            Write-Log "Myanmar keyboard selection: KeyMagic"
-            Install-MyanmarKeyboardApp -Id "KeyMagic.KeyMagic" -Name "KeyMagic"
-            $resultLabel = "KeyMagic"
-        }
-        '2' {
-            Write-Log "Myanmar keyboard selection: Keyman"
-            Install-MyanmarKeyboardApp -Id "SIL.Keyman" -Name "Keyman"
-            $resultLabel = "Keyman"
-        }
-        '3' {
-            Write-Log "Myanmar keyboard selection: Both (KeyMagic + Keyman)"
-            Install-MyanmarKeyboardApp -Id "KeyMagic.KeyMagic" -Name "KeyMagic"
-            Install-MyanmarKeyboardApp -Id "SIL.Keyman"        -Name "Keyman"
-            $resultLabel = "KeyMagic + Keyman"
-        }
-        'S' {
-            Write-Log "Myanmar keyboard selection: Skipped"
-            Show-Step "Myanmar keyboard skipped" "SKIP"
-            $resultLabel = "Skipped"
-        }
-    }
-    return $resultLabel
+    Write-Host "  Installing Myanmar Keyboard (Keyman)..." -ForegroundColor Cyan
+    Write-Log "Myanmar keyboard auto-selection: Keyman"
+    Install-MyanmarKeyboardApp -Id "SIL.Keyman" -Name "Keyman"
+    return "Keyman"
 }
 
 # ══════════════════════════════════════════════════════════════════
