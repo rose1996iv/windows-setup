@@ -19,7 +19,29 @@ $ProgressPreference    = "SilentlyContinue"
 if (Test-Path "$env:TEMP\Update-Dashboard.ps1") {
     . "$env:TEMP\Update-Dashboard.ps1"
 } else {
-    function Update-Dashboard { param([int]$Phase, [string]$Status, [int]$Progress, [string]$LogMessage) }
+    function Update-Dashboard {
+        param(
+            [int]$Phase,
+            [string]$Status,
+            [int]$Progress,
+            [string]$LogMessage
+        )
+        if ($null -ne $global:State) {
+            $global:State.Phase   = $Phase
+            $global:State.Percent = $Progress
+            $global:State.Step    = $LogMessage
+            $global:State.Log.Add(@{
+                time   = (Get-Date -Format "HH:mm:ss")
+                msg    = $LogMessage
+                status = switch ($Status) {
+                    "done"    { "OK"   }
+                    "running" { "WORK" }
+                    "fail"    { "FAIL" }
+                    default   { "INFO" }
+                }
+            }) | Out-Null
+        }
+    }
 }
 
 # ══════════════════════════════════════════════════════════════════
