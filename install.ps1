@@ -615,6 +615,17 @@ function rotateTip() {
   }, 400);
 }
 
+function stepClass(s) {
+  if (!s) return 'st-info';
+  if (s.match(/^\u2b07|Downloading/i))           return 'st-dl';
+  if (s.match(/Verifying|hash|Extracting/i))       return 'st-verify';
+  if (s.match(/Installing|Starting package/i))     return 'st-inst';
+  if (s.match(/^\u2713|Installed:|Updated:/i))     return 'st-done';
+  if (s.match(/Already latest|already installed/i))return 'st-skip';
+  if (s.match(/Failed|\u2717/i))                   return 'st-fail';
+  return 'st-info';
+}
+
 function buildPhaseList(activePhase, activeStep) {
   return PHASES.map((p, i) => {
     const phaseNum = i + 1;
@@ -624,8 +635,13 @@ function buildPhaseList(activePhase, activeStep) {
     const check    = done   ? '<span style="color:var(--green)">✓</span>'
                    : active ? '<div class="spinner"></div>'
                    : '';
-    const step     = active && activeStep
-                   ? `<div class="phase-step">${activeStep}</div>` : '';
+    let step = '';
+    if (active && activeStep) {
+      const sc  = stepClass(activeStep);
+      const showBar = sc === 'st-dl';  // animated bar only while downloading
+      step = `<div class="phase-step ${sc}">${activeStep}</div>`
+           + (showBar ? '<div class="phase-dl-bar"></div>' : '');
+    }
     return `
       <div class="phase-item ${cls}">
         <div class="phase-icon">${p.icon}</div>
@@ -729,6 +745,10 @@ async function poll() {
       document.getElementById('noticeTitle').textContent = '🎉 Setup finished!';
       document.getElementById('noticeDesc').textContent  =
         'All apps installed and system configured. Please restart your PC to apply all changes.';
+      // Reset currentOp banner to done state
+      const op = document.getElementById('currentOp');
+      op.className  = 'op-ok';
+      op.textContent = '✓ All phases complete — please restart your PC';
       return;
     }
 
