@@ -217,7 +217,29 @@ header {
 .phase-icon { font-size:18px; flex-shrink:0; }
 .phase-body { flex:1; min-width:0; }
 .phase-name { font-size:13px; font-weight:500; }
-.phase-step { font-size:11px; color:var(--muted); font-family:var(--mono); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.phase-step { font-size:11px; font-family:var(--mono); margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* Colour-coded step badge based on operation type */
+.phase-step.st-dl     { color:var(--blue);   }
+.phase-step.st-verify { color:var(--amber);  }
+.phase-step.st-inst   { color:var(--purple); }
+.phase-step.st-done   { color:var(--green);  }
+.phase-step.st-skip   { color:var(--muted);  }
+.phase-step.st-fail   { color:var(--red);    }
+.phase-step.st-info   { color:var(--blue);   opacity:.7; }
+/* Download progress mini-bar inside active phase */
+.phase-dl-bar {
+  height:3px; background:rgba(56,189,248,.15);
+  border-radius:2px; margin-top:6px; overflow:hidden;
+  position:relative;
+}
+.phase-dl-bar::after {
+  content:'';
+  position:absolute; left:-60%; top:0; bottom:0;
+  width:60%;
+  background:linear-gradient(90deg, transparent, var(--blue), transparent);
+  animation: dlSweep 1.6s linear infinite;
+}
+@keyframes dlSweep { to { left:100%; } }
 .phase-check { font-size:14px; margin-left:auto; flex-shrink:0; }
 
 /* ── Spinner ── */
@@ -262,7 +284,26 @@ header {
 .log-fail  { color:var(--red); }
 .log-info  { color:var(--blue); }
 .log-skip  { color:var(--muted); }
-@keyframes fadeIn { from{opacity:0;transform:translateX(-4px)} to{opacity:1;transform:none} }
+/* ── Current-op banner (top of log panel) ── */
+#currentOp {
+  font-family:var(--mono); font-size:11px;
+  padding:8px 12px; border-radius:8px;
+  margin-bottom:10px;
+  background:rgba(56,189,248,.06);
+  border:1px solid rgba(56,189,248,.18);
+  color:var(--blue);
+  min-height:34px;
+  display:flex; align-items:center; gap:8px;
+  transition: all .3s;
+  word-break:break-all;
+}
+#currentOp.op-dl     { background:rgba(56,189,248,.07);  border-color:rgba(56,189,248,.25);  color:var(--blue);   }
+#currentOp.op-verify { background:rgba(252,211,77,.06);  border-color:rgba(252,211,77,.25);  color:var(--amber);  }
+#currentOp.op-inst   { background:rgba(167,139,250,.07); border-color:rgba(167,139,250,.25); color:var(--purple); }
+#currentOp.op-ok     { background:rgba(34,211,165,.05);  border-color:rgba(34,211,165,.2);   color:var(--green);  }
+#currentOp.op-skip   { background:rgba(100,116,139,.05); border-color:rgba(100,116,139,.2);  color:var(--muted);  }
+#currentOp.op-fail   { background:rgba(248,113,113,.06); border-color:rgba(248,113,113,.25); color:var(--red);    }
+#currentOp.op-idle   { opacity:.45; }
 
 /* ── Cursor blink ── */
 .cursor {
@@ -400,6 +441,8 @@ header {
     <!-- Right: live log -->
     <div class="card log-panel" style="animation-delay:.1s;">
       <div class="card-title">Live Log</div>
+      <!-- Current operation banner -->
+      <div id="currentOp" class="op-idle">Waiting for setup to begin...</div>
       <div class="log-body" id="logBody">
         <div class="log-entry">
           <span class="log-time">--:--:--</span>
@@ -481,6 +524,17 @@ function rotateTip() {
   }, 400);
 }
 
+function stepClass(s) {
+  if (!s) return 'st-info';
+  if (s.match(/^\u2b07|Downloading/i))           return 'st-dl';
+  if (s.match(/Verifying|hash|Extracting/i))       return 'st-verify';
+  if (s.match(/Installing|Starting package/i))     return 'st-inst';
+  if (s.match(/^\u2713|Installed:|Updated:/i))     return 'st-done';
+  if (s.match(/Already latest|already installed/i))return 'st-skip';
+  if (s.match(/Failed|\u2717/i))                   return 'st-fail';
+  return 'st-info';
+}
+
 function buildPhaseList(activePhase, activeStep) {
   return PHASES.map((p, i) => {
     const phaseNum = i + 1;
@@ -490,8 +544,13 @@ function buildPhaseList(activePhase, activeStep) {
     const check    = done   ? '<span style="color:var(--green)">✓</span>'
                    : active ? '<div class="spinner"></div>'
                    : '';
-    const step     = active && activeStep
-                   ? `<div class="phase-step">${activeStep}</div>` : '';
+    let step = '';
+    if (active && activeStep) {
+      const sc  = stepClass(activeStep);
+      const showBar = sc === 'st-dl';  // animated bar only while downloading
+      step = `<div class="phase-step ${sc}">${activeStep}</div>`
+           + (showBar ? '<div class="phase-dl-bar"></div>' : '');
+    }
     return `
       <div class="phase-item ${cls}">
         <div class="phase-icon">${p.icon}</div>
@@ -541,8 +600,24 @@ async function poll() {
     document.getElementById('progCurrent').textContent = d.phase || 0;
 
     // Phases
+    const stepText = d.step || '';
     document.getElementById('phaseList').innerHTML =
-      buildPhaseList(d.phase || 0, d.step || '');
+      buildPhaseList(d.phase || 0, stepText);
+
+    // Current-operation banner
+    if (stepText) {
+      const op    = document.getElementById('currentOp');
+      const sc    = stepClass(stepText);
+      const opCls = sc === 'st-dl'     ? 'op-dl'
+                  : sc === 'st-verify' ? 'op-verify'
+                  : sc === 'st-inst'   ? 'op-inst'
+                  : sc === 'st-done'   ? 'op-ok'
+                  : sc === 'st-fail'   ? 'op-fail'
+                  : sc === 'st-skip'   ? 'op-skip'
+                  : 'op-idle';
+      op.className  = opCls;
+      op.textContent = stepText;
+    }
 
     // Stats
     document.getElementById('sInstalled').textContent = d.installed || 0;
@@ -579,6 +654,10 @@ async function poll() {
       document.getElementById('noticeTitle').textContent = '🎉 Setup finished!';
       document.getElementById('noticeDesc').textContent  =
         'All apps installed and system configured. Please restart your PC to apply all changes.';
+      // Reset currentOp banner to done state
+      const op = document.getElementById('currentOp');
+      op.className  = 'op-ok';
+      op.textContent = '✓ All phases complete — please restart your PC';
       return;
     }
 

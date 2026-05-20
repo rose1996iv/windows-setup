@@ -309,7 +309,27 @@ header {
 .phase-icon { font-size:18px; flex-shrink:0; }
 .phase-body { flex:1; min-width:0; }
 .phase-name { font-size:13px; font-weight:500; }
-.phase-step { font-size:11px; color:var(--muted); font-family:var(--mono); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.phase-step { font-size:11px; font-family:var(--mono); margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.phase-step.st-dl     { color:var(--blue);   }
+.phase-step.st-verify { color:var(--amber);  }
+.phase-step.st-inst   { color:var(--purple); }
+.phase-step.st-done   { color:var(--green);  }
+.phase-step.st-skip   { color:var(--muted);  }
+.phase-step.st-fail   { color:var(--red);    }
+.phase-step.st-info   { color:var(--blue);   opacity:.7; }
+.phase-dl-bar {
+  height:3px; background:rgba(56,189,248,.15);
+  border-radius:2px; margin-top:6px; overflow:hidden;
+  position:relative;
+}
+.phase-dl-bar::after {
+  content:'';
+  position:absolute; left:-60%; top:0; bottom:0;
+  width:60%;
+  background:linear-gradient(90deg, transparent, var(--blue), transparent);
+  animation: dlSweep 1.6s linear infinite;
+}
+@keyframes dlSweep { to { left:100%; } }
 .phase-check { font-size:14px; margin-left:auto; flex-shrink:0; }
 
 /* ── Spinner ── */
@@ -355,6 +375,27 @@ header {
 .log-info  { color:var(--blue); }
 .log-skip  { color:var(--muted); }
 @keyframes fadeIn { from{opacity:0;transform:translateX(-4px)} to{opacity:1;transform:none} }
+
+/* ── Current-op banner ── */
+#currentOp {
+  font-family:var(--mono); font-size:11px;
+  padding:8px 12px; border-radius:8px;
+  margin-bottom:10px;
+  background:rgba(56,189,248,.06);
+  border:1px solid rgba(56,189,248,.18);
+  color:var(--blue);
+  min-height:34px;
+  display:flex; align-items:center; gap:8px;
+  transition: all .3s;
+  word-break:break-all;
+}
+#currentOp.op-dl     { background:rgba(56,189,248,.07);  border-color:rgba(56,189,248,.25);  color:var(--blue);   }
+#currentOp.op-verify { background:rgba(252,211,77,.06);  border-color:rgba(252,211,77,.25);  color:var(--amber);  }
+#currentOp.op-inst   { background:rgba(167,139,250,.07); border-color:rgba(167,139,250,.25); color:var(--purple); }
+#currentOp.op-ok     { background:rgba(34,211,165,.05);  border-color:rgba(34,211,165,.2);   color:var(--green);  }
+#currentOp.op-skip   { background:rgba(100,116,139,.05); border-color:rgba(100,116,139,.2);  color:var(--muted);  }
+#currentOp.op-fail   { background:rgba(248,113,113,.06); border-color:rgba(248,113,113,.25); color:var(--red);    }
+#currentOp.op-idle   { opacity:.45; }
 
 /* ── Cursor blink ── */
 .cursor {
@@ -492,6 +533,7 @@ header {
     <!-- Right: live log -->
     <div class="card log-panel" style="animation-delay:.1s;">
       <div class="card-title">Live Log</div>
+      <div id="currentOp" class="op-idle">Waiting for setup to begin...</div>
       <div class="log-body" id="logBody">
         <div class="log-entry">
           <span class="log-time">--:--:--</span>
@@ -633,8 +675,24 @@ async function poll() {
     document.getElementById('progCurrent').textContent = d.phase || 0;
 
     // Phases
+    const stepText = d.step || '';
     document.getElementById('phaseList').innerHTML =
-      buildPhaseList(d.phase || 0, d.step || '');
+      buildPhaseList(d.phase || 0, stepText);
+
+    // Current-operation banner
+    if (stepText) {
+      const op    = document.getElementById('currentOp');
+      const sc    = stepClass(stepText);
+      const opCls = sc === 'st-dl'     ? 'op-dl'
+                  : sc === 'st-verify' ? 'op-verify'
+                  : sc === 'st-inst'   ? 'op-inst'
+                  : sc === 'st-done'   ? 'op-ok'
+                  : sc === 'st-fail'   ? 'op-fail'
+                  : sc === 'st-skip'   ? 'op-skip'
+                  : 'op-idle';
+      op.className  = opCls;
+      op.textContent = stepText;
+    }
 
     // Stats
     document.getElementById('sInstalled').textContent = d.installed || 0;

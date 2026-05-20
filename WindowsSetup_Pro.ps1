@@ -124,6 +124,109 @@ function Show-Summary {
     Write-Host ""
 }
 
+# ── Real-time winget progress tracker ─────────────────────────────────────
+function Invoke-WingetWithProgress {
+    param(
+        [string]$Id,
+        [string]$Name,
+        [string]$Action,      # "install" or "upgrade"
+        [int]$DashPhase,
+        [int]$ProgressPct
+    )
+
+    $outFile = "$env:TEMP\wg_out_$(Get-Random).txt"
+    $errFile = "$env:TEMP\wg_err_$(Get-Random).txt"
+
+    # Run winget without --silent so it outputs download/install status
+    # --disable-interactivity still prevents any prompts
+    $argList = "$Action --id `"$Id`" " +
+               "--accept-package-agreements " +
+               "--accept-source-agreements " +
+               "--disable-interactivity"
+
+    $psi                        = [System.Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName               = "winget"
+    $psi.Arguments              = $argList
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError  = $true
+    $psi.UseShellExecute        = $false
+    $psi.CreateNoWindow         = $true
+
+    $proc = [System.Diagnostics.Process]::new()
+    $proc.StartInfo = $psi
+
+    # Collect output asynchronously into a StringBuilder
+    $sb  = [System.Text.StringBuilder]::new()
+    $sbe = [System.Text.StringBuilder]::new()
+    $proc.OutputDataReceived += { if ($_.Data) { [void]$sb.AppendLine($_.Data) } }
+    $proc.ErrorDataReceived  += { if ($_.Data) { [void]$sbe.AppendLine($_.Data) } }
+
+    [void]$proc.Start()
+    $proc.BeginOutputReadLine()
+    $proc.BeginErrorReadLine()
+
+    $lastMsg  = ""
+    $lastLine = ""
+    $spinner  = [char[]]@(0x28CB,0x28D9,0x28B9,0x28B8,0x28BC,0x28B4,0x28A6,0x28A7,0x28A3,0x28AF)
+    $spinIdx  = 0
+
+    while (-not $proc.HasExited) {
+        Start-Sleep -Milliseconds 500
+        $content = $sb.ToString()
+
+        # -- Extract download size from lines like "12.50 MB / 85.20 MB" or "X% XX MB"
+        $sizeMatch = [regex]::Matches($content, '(\d+[.,]?\d*)\s*(B|KB|MB|GB)\s*/\s*(\d+[.,]?\d*)\s*(B|KB|MB|GB)')
+        $sizeInfo  = if ($sizeMatch.Count -gt 0) {
+            $m = $sizeMatch[$sizeMatch.Count - 1]  # take the latest
+            " [$($m.Groups[1].Value) $($m.Groups[2].Value) / $($m.Groups[3].Value) $($m.Groups[4].Value)]"
+        } else { "" }
+
+        # -- Parse current phase from winget output
+        $msg = if ($content -match '(?i)Downloading') {
+            "⬇ Downloading $Name$sizeInfo"
+        } elseif ($content -match '(?i)hash verification succeeded|Successfully verified|Extracting archive') {
+            "🔐 Verifying $Name..."
+        } elseif ($content -match '(?i)Starting package install|Launching installer|Installing package') {
+            "⚙ Installing $Name..."
+        } elseif ($content -match '(?i)No applicable update|No available upgrade') {
+            "─ No update for $Name"
+        } elseif ($content -match '(?i)already installed') {
+            "─ $Name already installed"
+        } elseif ($content -match '(?i)Found .+') {
+            "○ Found $Name — preparing..."
+        } else {
+            "$($spinner[$spinIdx % $spinner.Count]) [$Action] $Name..."
+        }
+        $spinIdx++
+
+        # Console: overwrite same line
+        $consoleLine = "     $msg"
+        if ($consoleLine -ne $lastLine) {
+            $pad = ' ' * [Math]::Max(0, $lastLine.Length - $consoleLine.Length)
+            Write-Host "`r$consoleLine$pad" -NoNewline -ForegroundColor Cyan
+            $lastLine = $consoleLine
+        }
+
+        # Dashboard: update only when status changes
+        if ($msg -ne $lastMsg) {
+            $lastMsg = $msg
+            Update-Dashboard -Phase $DashPhase -Status "running" -Progress $ProgressPct `
+                -LogMessage $msg
+        }
+    }
+
+    Write-Host ""  # newline after the overwriting status line
+
+    $allOutput = $sb.ToString() + $sbe.ToString()
+
+    return [PSCustomObject]@{
+        ExitCode         = $proc.ExitCode
+        Output           = $allOutput
+        Success          = ($proc.ExitCode -eq 0 -or $allOutput -match '(?i)successfully installed')
+        AlreadyInstalled = ($allOutput -match '(?i)already installed|No applicable update|No available upgrade')
+    }
+}
+
 # ── Smart installer: scan first, install missing (priority), then update existing ──
 function Install-PhaseApps {
     param(
@@ -143,7 +246,6 @@ function Install-PhaseApps {
     $toUpdate  = [System.Collections.Generic.List[object]]::new()
 
     foreach ($app in $Apps) {
-        # Match by winget ID (case-insensitive)
         if ($installedSnapshot -match [regex]::Escape($app.id)) {
             $toUpdate.Add($app)
         } else {
@@ -167,11 +269,10 @@ function Install-PhaseApps {
         Write-Host ("  " + "─" * 55) -ForegroundColor DarkGray
         foreach ($app in $toInstall) {
             $pct = [int](($counter / $total) * 78) + 12
-            Show-Progress -Current $counter -Total $total -Label "NEW  $($app.name)"
-            $result = winget install --id $app.id `
-                --silent --accept-package-agreements `
-                --accept-source-agreements --disable-interactivity 2>&1
-            if ($LASTEXITCODE -eq 0 -or ($result -match "successfully installed")) {
+            Write-Host "  ○  $($app.name)" -ForegroundColor DarkGray
+            $wg = Invoke-WingetWithProgress -Id $app.id -Name $app.name `
+                      -Action "install" -DashPhase $DashPhase -ProgressPct $pct
+            if ($wg.Success) {
                 $INSTALLED.Add($app.name) | Out-Null
                 Write-Log "OK  $($app.name) ($($app.id))"
                 Show-Step "$($app.name)" "OK"
@@ -195,20 +296,24 @@ function Install-PhaseApps {
         Write-Host ("  " + "─" * 55) -ForegroundColor DarkGray
         foreach ($app in $toUpdate) {
             $pct = [int](($counter / $total) * 78) + 12
-            Show-Progress -Current $counter -Total $total -Label "UPDATE  $($app.name)"
-            $result = winget upgrade --id $app.id `
-                --silent --accept-package-agreements `
-                --accept-source-agreements --disable-interactivity 2>&1
-            if ($LASTEXITCODE -eq 0 -or ($result -match "successfully installed")) {
+            Write-Host "  ○  $($app.name)" -ForegroundColor DarkGray
+            $wg = Invoke-WingetWithProgress -Id $app.id -Name $app.name `
+                      -Action "upgrade" -DashPhase $DashPhase -ProgressPct $pct
+            if ($wg.AlreadyInstalled) {
+                $SKIPPED.Add($app.name) | Out-Null
+                Write-Log "SKIP (up-to-date)  $($app.name) ($($app.id))"
+                Show-Step "$($app.name) — already latest" "SKIP"
+                Update-Dashboard -Phase $DashPhase -Status "running" -Progress $pct `
+                    -LogMessage "─ Already latest: $($app.name)"
+            } elseif ($wg.Success) {
                 $INSTALLED.Add("$($app.name) (updated)") | Out-Null
                 Write-Log "OK (updated)  $($app.name) ($($app.id))"
                 Show-Step "$($app.name) — updated" "OK"
                 Update-Dashboard -Phase $DashPhase -Status "running" -Progress $pct `
                     -LogMessage "↑ Updated: $($app.name)"
             } else {
-                # No update available — already on latest version
                 $SKIPPED.Add($app.name) | Out-Null
-                Write-Log "SKIP (up-to-date)  $($app.name) ($($app.id))"
+                Write-Log "SKIP  $($app.name) ($($app.id))"
                 Show-Step "$($app.name) — already latest" "SKIP"
                 Update-Dashboard -Phase $DashPhase -Status "running" -Progress $pct `
                     -LogMessage "─ Already latest: $($app.name)"
